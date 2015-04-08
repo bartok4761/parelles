@@ -1,0 +1,327 @@
+<!--
+	NOM: Oscar Alvarez Barcons
+	CURS: DAW 2A
+	DESCRIPCIO: Aquesta aquesta aplicacio es un puzzle que es mou controlant els eventos de les fletxe
+s-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<link rel="stylesheet" href="./css/style.css">
+	<script src="./js/jquery-2.1.3.js"></script>
+	<title>PUZZLE</title>
+</head>
+<body>
+	
+	<div id="container">
+
+		<div id="marcador">
+			<div id="crono"> 
+				<span id="victoria"></span>
+				<span id="cronometre"></span>
+			</div>
+			<div id="botons"></div>
+		</div>
+
+		<div id="joc">
+			<img src="./img/intro.png">
+		</div>
+
+	</div>
+	
+	<script>
+
+		//Valor de les columnes i les files les quals serviran per saver la posicio de les pesses
+		var xe = 0;
+		var ye = 0;		
+		//Variables del joc
+		var imatges = [];		
+		var imatgesOrdenat = [];
+		var numFiles = 3;
+		var numColumnes = 3;
+		var pillatButton = 0;
+		var token = true;
+		var srcBlanc = "";
+		var srcImatge = "";
+
+		//Variables del crono
+		var abans = 0;
+		var ara = 0;
+		var elapsed = 0;
+		var timerID = 0;
+		
+		//Array que conte els elements dels botons de sel·leccio de puzzle
+		var miniatures = ["./img/0/full.jpg","./img/1/full.jpg","./img/2/full.jpg", "./img/3/full.jpg"];
+		
+		//Aquest bucle genera dinamicament els botons de sel·leccio de joc
+		for(var x = 0; x < miniatures.length; x++){
+			var boto = document.createElement('input');
+			boto.setAttribute('type', 'button');
+			boto.setAttribute('id', x);
+			boto.setAttribute('style', 'background-image: url(' + miniatures[x] +');');
+			document.getElementById('botons').appendChild(boto);
+		}		
+
+		//Capturo el click dels botons i utilitzo la seva id per identificar quin boto s'ha premut.
+		//En aquest cas si prem el cuart boto (botons de 0 - 3) es genera un puzzle de 4 x 4
+		$("input").click(function() {								
+ 			pillatButton = this.id;
+ 			if(pillatButton == 3){
+ 				numFiles = 4;
+ 				numColumnes = 4;
+ 			}else{
+ 				numFiles = 3;
+ 				numColumnes = 3;
+ 			}
+ 			joc(this.id);
+		});		
+
+	
+		//Funcio que crea el taulell de joc en si.
+		function joc(pillatButton){
+
+			//Aquestes primeres linies posen alguns valors necesaris a 0 per tal re resetejar l'anterior joc
+			var on = eliminarImatges(document.getElementById('joc'));
+
+			token = true;
+			iniciarCrono();	
+			prepararArray(numColumnes, numFiles, pillatButton);			
+			crearImatges(on, imatges, numColumnes, numFiles, pillatButton);
+
+
+			//Aquesta funcio prepara l'array que conte totes les imatges del puzzle
+			function prepararArray(cols, rows, pillatButton){			
+
+				for(var x = 0; x < cols * rows - 1 ; x++){
+					imatges.push("./img/" + pillatButton + "/" + x + ".jpeg");					
+				}
+				//Afegeixo una imatge en blanc a l'array que servira de forat buit
+				imatges.push("./img/" + pillatButton + "/white.jpeg");
+
+				//Array d'imatges ordenat rep una copia de imatges
+				imatgesOrdenat = imatges.slice(0);
+		
+				/*Desordeno l'arrai d'imatges: NOTA: per fer proves d'acavar el joc comentar aquesta linia
+				d'aquesta manera el puzzle no es desordenara i es pot acavar prement una fletxa i la contraria */
+				imatges.sort(function() {return 0.5 - Math.random()});
+
+			}
+
+			//Aquesta funcio crea la graella d'imatges amb la que es mostra el puzzle
+			function crearImatges(on, imatges, cols, rows, pillatButton){
+				var numImatge = 0;
+				var posicioDeWhite = imatges.indexOf("./img/" + pillatButton + "/white.jpeg");					
+
+				for(var y = 0; y < rows; y++){
+					for(var x = 0; x < cols; x++){
+						var img = document.createElement('img');
+						//Cuan troba el cuadre blanc posa valor a les variables xe ye. Daquesta maera cuan comensi el joc puc saver on es trova
+						if(numImatge == posicioDeWhite){						
+							xe = x;
+							ye = y;	
+						}
+						img.setAttribute('src', imatges[numImatge]);		
+						img.setAttribute('x', x);
+						img.setAttribute('y', y);
+						on.appendChild(img);					
+								
+						numImatge++;
+					}
+					on.innerHTML += "<div style=\"clear:both\">";				
+				}
+			}
+
+			//Al crear un joc necesito elimnar l'anterior 
+			function eliminarImatges(taulell){
+
+				imatges = [];		
+				imatgesOrdenat = [];
+				xe = 0;
+				ye = 0;
+
+				//crono				
+				abans = 0;
+				ara = 0;
+				elapsed = 0;
+				timerID = 0;
+
+				document.getElementById('victoria').innerHTML = ""; 
+
+				while (taulell.firstChild){
+					taulell.removeChild(taulell.firstChild);
+				}
+				return taulell;
+
+			}		
+		}		
+
+		/*		
+		 * Aquesta funcio comprova el guanyador. Per cada moviment agafo l'atribut src re totes les fixes i el comparo
+		 * amb l'array d'imatges ordenat: Si conincideix poso un 0 a l'array del contrari un 1. Finalment busco el
+		 * nombre 1 a l'array de coincidencies, si no el troba bol dir que tot son zeros per tant el joc s'ha acavat
+		 * pauso el crono substitueixo el cuadre blanc per la imatge que falta i poso el token a false. Aquest token
+		 * em permetra evitar que es capturin els events del teclat un cop acavat el joc.
+		*/
+	
+		function checkWinner(cols, rows, pillatButton){
+
+			var coincidences = [];
+			var numImg = 0;
+			
+
+			for(var y = 0; y < cols; y++){
+				for(var x = 0; x < rows; x++){			
+							
+					if($( 'img[x="'+ x +'"][y="' + y + '"]' ).attr("src") == imatgesOrdenat[numImg]){
+						coincidences.push(0);
+					}else{
+						coincidences.push(1);
+					}
+					numImg++;
+				}				
+			}
+
+			if(coincidences.indexOf(1) == -1){
+				
+				pausarCrono();
+
+				document.getElementById('victoria').innerHTML = "JOC ACABAT EN:" ;				
+
+				$('img[src = "' + srcBlanc + '"]').attr("src", "./img/" + pillatButton +"/"+(imatges.length - 1) + ".jpeg");
+				token = false;
+			}						
+		}
+
+		//Prototip per posar els 0 devant del crono per mostrar el format (00:00:00)
+		Number.prototype.omplir = function(num) {
+			var str = this.toString();
+			var resta = num - str.length;
+			str = '';
+			for(var i = 0; i < resta; i++) str += '0';
+			return str + this.toString();
+		}
+
+		//Aquesta funcio fa que funcioni el conometre
+		function cronometre(){
+			ara = new Date();
+			elapsed = new Date(ara - abans);
+			
+			var segons = elapsed.getSeconds();
+			var minuts = elapsed.getMinutes();
+			var hores = elapsed.getUTCHours();
+
+			document.getElementById("cronometre").innerHTML = hores.omplir(2) + ":" + minuts.omplir(2) + ":" + segons.omplir(2);
+			timerID = setTimeout("cronometre()", 10);
+		}
+
+		//Funcio per inciar el cronometre
+		function iniciarCrono(){
+			abans = new Date();
+			cronometre();
+		}
+		//Funcio per pausar el cronometre
+		function pausarCrono(){									
+			clearTimeout(timerID);				
+		}
+
+		//Al premer una tecla la capturo i segons la tecla que he premut actuo en consequencia. 
+		/*
+		 * Left: 37
+		 * Up: 38
+		 * Right: 39
+		 * Down: 40
+		*/
+	
+		//Aquesta funcio rep unes coordenades i obte l'atribut src
+		function getPath(xe, ye){
+			return $( 'img[x="'+ xe +'"][y="' + ye + '"]' ).attr("src");
+		}
+
+		//Aquesta funcio rep unes coordenades  i un lloc i li assigna un src
+		function setPath(xe, ye, path){
+			return $( 'img[x="'+ xe +'"][y="' + ye + '"]' ).attr("src", path);
+		}	
+		
+		$( window ).keypress(function( event ) {
+			
+			/*			
+			 * Aqui comprovo si el token es igual a false (cuan s'hagi guanyat) retorna flase i per tant no respon
+			 * a cap telca. Del contrari comprovo per cada cas que no se surit dels limits de files/columnes i en 
+			 * cas de estar dins els limits invertixo la fitxa inplicada amb el cuadra blanc i comprobo si despres 
+			 * del moviment hi ha vicoria.
+			*/			
+			if(token == false){
+				return false;
+			}else{
+				switch(event.keyCode) {
+			    case 37:		    	
+			    	if(xe < numColumnes - 1){
+
+			    		srcBlanc = getPath(xe, ye);
+			    		srcImatge = getPath((parseInt(xe) + 1), ye);
+			    		
+			    		setPath((parseInt(xe) + 1), ye, srcBlanc);		    		    		
+			    		setPath(xe, ye, srcImatge);
+
+			    		checkWinner(numColumnes, numFiles, pillatButton);	
+			    			    			    	
+			        	xe ++;		      
+
+			    	}
+			    	
+			        break;
+			    case 38:
+			    	if(ye < numFiles - 1){
+
+			    		srcBlanc = getPath(xe, ye);		    		
+			    		srcImatge = getPath(xe, (parseInt(ye) + 1));
+
+			    		setPath(xe, (parseInt(ye) + 1), srcBlanc);		    		    		
+			    		setPath(xe, ye, srcImatge);
+			    		
+			    		checkWinner(numColumnes, numFiles, pillatButton);	
+			    		
+			    		ye++;
+			    		
+			    	}		    	
+			        break;
+			    case 39:	
+			    	if(xe > 0){
+			    		
+			    		srcBlanc = getPath(xe, ye);
+			    		srcImatge = getPath((parseInt(xe) - 1), ye);
+
+			    		setPath((parseInt(xe) - 1), ye, srcBlanc);		    		    		
+			    		setPath(xe, ye, srcImatge);
+
+			    		checkWinner(numColumnes, numFiles, pillatButton);			    	
+			    		xe--;		    		
+			    		
+			    	}
+			        break;	
+			
+			    case 40:		    	
+			    	if(ye > 0){		    		
+
+			    		srcBlanc = getPath(xe, ye);		    		
+			    		srcImatge = getPath(xe, (parseInt(ye) - 1));		    		
+
+			    		setPath(xe, (parseInt(ye) - 1), srcBlanc);		    		    		
+			    		setPath(xe, ye, srcImatge);
+
+				    	checkWinner(numColumnes, numFiles, pillatButton);	
+				    	ye--;
+				    	
+				    }
+			        break;
+			   
+			    default:
+			        return 0;
+			    }
+		    }		
+		});
+
+	</script>
+</body>
+</html>
